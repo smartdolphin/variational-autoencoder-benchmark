@@ -31,21 +31,3 @@ def confusion_matrix_majority(y_true, y_clustering):
         major_label = __majority(real_labels)
         new_labels[locator] = major_label
     return confusion_matrix(y_true, new_labels)
-
-
-def visual_cm(z, label, name):
-    from sklearn.cluster import KMeans
-    N = len(set(label))
-
-    # k-means
-    kmeans = KMeans(n_clusters=N, max_iter=2000, n_jobs=1, n_init=20)
-    y_pred = kmeans.fit_predict(np.array(z))
-
-    # confusion matrix
-    conf_mat = confusion_matrix_majority(np.array(label), y_pred)
-
-    # test metric
-    total_count = np.sum(conf_mat)
-    correct = np.trace(conf_mat)
-    accuracy = correct / total_count
-    print('K-means accuracy: {0}'.format(accuracy))

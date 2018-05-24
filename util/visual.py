@@ -1,6 +1,39 @@
+from sklearn.cluster import KMeans
 import itertools
 import matplotlib.pylab as plt
 import numpy as np
+from util.metric import clustering_accuracy, confusion_matrix_majority
+
+
+def kmeans_clustering_accuracy(z, y_true):
+    N = len(set(y_true))
+
+    # k-means
+    kmeans = KMeans(n_clusters=N, max_iter=2000, n_jobs=1, n_init=20)
+    y_pred = kmeans.fit_predict(np.array(z))
+
+    # confusion matrix
+    accuracy = clustering_accuracy(np.array(y_true), y_pred)
+    print('K-means accuracy: {0}'.format(accuracy))
+
+
+def kmeans_confusion_matrix(latent_z, y_true, save_path, class_names=None):
+    N = len(set(y_true))
+
+    # k-means
+    kmeans = KMeans(n_clusters=N, max_iter=2000, n_jobs=1, n_init=20)
+    y_pred = kmeans.fit_predict(np.array(latent_z))
+
+    # confusion matrix
+    conf_mat = confusion_matrix_majority(np.array(y_true), y_pred)
+
+    # test metric
+    total_count = np.sum(conf_mat)
+    correct = np.trace(conf_mat)
+    accuracy = correct / total_count
+    title = 'K-means accuracy: {0}'.format(accuracy)
+    print(title)
+    plot_confusion_matrix(conf_mat, class_names, save_path, False, title)
 
 
 def plot_confusion_matrix(cm, class_names, save_path, normalize=False, title='confusion matrix', cmap=plt.cmBlues):
