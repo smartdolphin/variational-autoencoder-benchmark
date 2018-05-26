@@ -1,6 +1,7 @@
 from sklearn.cluster import KMeans
 import itertools
-import matplotlib.pylab as plt
+import os
+import matplotlib.pyplot as plt
 import numpy as np
 from util.metric import clustering_accuracy, confusion_matrix_majority
 
@@ -36,7 +37,7 @@ def kmeans_confusion_matrix(latent_z, y_true, save_path, class_names=None):
     plot_confusion_matrix(conf_mat, class_names, save_path, False, title)
 
 
-def plot_confusion_matrix(cm, class_names, save_path, normalize=False, title='confusion matrix', cmap=plt.cmBlues):
+def plot_confusion_matrix(cm, class_names, save_path, normalize=False, title='confusion matrix', cmap=plt.cm.Blues):
     if normalize:
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
         print('Normalized confusion matrix')
