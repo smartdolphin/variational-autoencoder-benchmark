@@ -1,5 +1,6 @@
-# reference: keras team (https://github.com/keras-team/keras)
+# referenced by keras team(https://github.com/keras-team/keras)
 from keras.layers import Lambda, Input, Dense
+from keras.losses import mse, binary_crossentropy
 from keras.models import Model
 from keras import backend as K
 from keras.utils import plot_model
@@ -24,7 +25,9 @@ def sampling(args):
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
 
 
-def vae(input_shape, intermediate_dim, latent_dim, original_dim):
+def vae(original_dim: int, intermediate_dim: int, latent_dim: int, mse: bool):
+    input_shape = (original_dim, )
+
     # VAE model = encoder + decoder
     # build encoder model
     inputs = Input(shape=input_shape, name='encoder_input')
@@ -54,4 +57,20 @@ def vae(input_shape, intermediate_dim, latent_dim, original_dim):
     # instantiate VAE model
     outputs = decoder(encoder(inputs)[2])
     vae = Model(inputs, outputs, name='vae_mlp')
-    return encoder, decoder, vae
+
+    # VAE loss = mse_loss or xent_loss + kl_loss
+    if mse:
+        reconstruction_loss = mse(inputs, outputs)
+    else:
+        reconstruction_loss = binary_crossentropy(inputs,
+                                                  outputs)
+
+    reconstruction_loss *= original_dim
+    kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
+    kl_loss = K.sum(kl_loss, axis=-1)
+    kl_loss *= -0.5
+    vae_loss = K.mean(reconstruction_loss + kl_loss)
+    vae.add_loss(vae_loss)
+    vae.compile(optimizer='adam')
+    vae.summary()
+    return vae, encoder, decoder
