@@ -1,4 +1,9 @@
-# referenced by keras team(https://github.com/keras-team/keras)
+""" referenced by keras team(https://github.com/keras-team/keras)
+
+[1] Kingma, Diederik P., and Max Welling.
+"Auto-encoding variational bayes."
+https://arxiv.org/abs/1312.6114
+"""
 from keras.layers import Lambda, Input, Dense
 from keras.losses import mse, binary_crossentropy
 from keras.models import Model
@@ -25,7 +30,7 @@ def sampling(args):
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
 
 
-def vae(original_dim: int, intermediate_dim: int, latent_dim: int, mse: bool):
+def vae_mlp(original_dim: int, intermediate_dim: int, latent_dim: int, is_mse: bool):
     input_shape = (original_dim, )
 
     # VAE model = encoder + decoder
@@ -59,7 +64,7 @@ def vae(original_dim: int, intermediate_dim: int, latent_dim: int, mse: bool):
     vae = Model(inputs, outputs, name='vae_mlp')
 
     # VAE loss = mse_loss or xent_loss + kl_loss
-    if mse:
+    if is_mse:
         reconstruction_loss = mse(inputs, outputs)
     else:
         reconstruction_loss = binary_crossentropy(inputs,
