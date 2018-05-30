@@ -4,8 +4,7 @@
 "Auto-encoding variational bayes."
 https://arxiv.org/abs/1312.6114
 """
-from keras.layers import Lambda, Input, Dense
-from keras.losses import mse, binary_crossentropy
+from keras.layers import Lambda, Input, Dense, Dropout
 from keras.models import Model
 from keras import backend as K
 from keras.utils import plot_model
@@ -27,31 +26,45 @@ def sampling(args):
     dim = K.int_shape(z_mean)[1]
     # by default, random_normal has mean=0 and std=1.0
     epsilon = K.random_normal(shape=(batch, dim))
-    return z_mean + K.exp(0.5 * z_log_var) * epsilon
+    return z_mean + z_log_var * epsilon
 
 
-def vae_mlp(original_dim: int, intermediate_dim: int, latent_dim: int, is_mse: bool):
+def vae_mlp(original_dim: int, intermediate_dim: int, latent_dim: int, dropout_rate=0.1):
     input_shape = (original_dim, )
 
     # VAE model = encoder + decoder
     # build encoder model
     inputs = Input(shape=input_shape, name='encoder_input')
-    x = Dense(intermediate_dim, activation='relu')(inputs)
-    z_mean = Dense(latent_dim, name='z_mean')(x)
-    z_log_var = Dense(latent_dim, name='z_log_var')(x)
+    # 1st hidden layer
+    x = Dense(intermediate_dim, activation='elu')(inputs)
+    x = Dropout(rate=dropout_rate)(x)
+    # 2nd hidden layer
+    x = Dense(intermediate_dim, activation='tanh')(x)
+    x = Dropout(rate=dropout_rate)(x)
+    gaussian_params = Dense(latent_dim * 2, name='gaussian_params')(x)
+    # The mean parameter is unconstrained
+    mean = Lambda(lambda param: param[:, :latent_dim])(gaussian_params)
+    # The standard deviation must be positive. Parametrize with a softplus and
+    # add a small epsilon for numerical stability
+    stddev = Lambda(lambda param: 1e-6 + K.softplus(param[:, latent_dim:]))(gaussian_params)
 
     # use reparameterization trick to push the sampling out as input
     # note that "output_shape" isn't necessary with the TensorFlow backend
-    z = Lambda(sampling, output_shape=(latent_dim,), name='z')([z_mean, z_log_var])
+    z = Lambda(sampling, output_shape=(latent_dim,), name='z')([mean, stddev])
 
     # instantiate encoder model
-    encoder = Model(inputs, [z_mean, z_log_var, z], name='encoder')
+    encoder = Model(inputs, [mean, stddev, z], name='encoder')
     encoder.summary()
     plot_model(encoder, to_file='vae_mlp_encoder.png', show_shapes=True)
 
     # build decoder model
     latent_inputs = Input(shape=(latent_dim,), name='z_sampling')
-    x = Dense(intermediate_dim, activation='relu')(latent_inputs)
+    # 1st hidden layer
+    x = Dense(intermediate_dim, activation='tanh')(latent_inputs)
+    x = Dropout(rate=dropout_rate)(x)
+    # 2nd hidden layer
+    x = Dense(intermediate_dim, activation='elu')(x)
+    x = Dropout(rate=dropout_rate)(x)
     outputs = Dense(original_dim, activation='sigmoid')(x)
 
     # instantiate decoder model
@@ -61,20 +74,16 @@ def vae_mlp(original_dim: int, intermediate_dim: int, latent_dim: int, is_mse: b
 
     # instantiate VAE model
     outputs = decoder(encoder(inputs)[2])
+    outputs = Lambda(lambda out: K.clip(out, 1e-8, 1 - 1e-8))(outputs)
     vae = Model(inputs, outputs, name='vae_mlp')
 
-    # VAE loss = mse_loss or xent_loss + kl_loss
-    if is_mse:
-        reconstruction_loss = mse(inputs, outputs)
-    else:
-        reconstruction_loss = binary_crossentropy(inputs,
-                                                  outputs)
+    # vae loss
+    marginal_likelihood = K.sum(inputs * K.log(outputs) + (1 - inputs) * K.log(1 - outputs), 1)
+    kl_divergence = K.mean(0.5 * K.sum(K.sqrt(mean) + K.sqrt(stddev) - K.log(1e-8 + K.sqrt(stddev)) - 1, 1))
+    marginal_likelihood = K.mean(marginal_likelihood)
+    elbo = marginal_likelihood - kl_divergence
+    vae_loss = -elbo
 
-    reconstruction_loss *= original_dim
-    kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
-    kl_loss = K.sum(kl_loss, axis=-1)
-    kl_loss *= -0.5
-    vae_loss = K.mean(reconstruction_loss + kl_loss)
     vae.add_loss(vae_loss)
     vae.compile(optimizer='adam')
     vae.summary()
