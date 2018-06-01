@@ -4,6 +4,7 @@
 "Auto-encoding variational bayes."
 https://arxiv.org/abs/1312.6114
 """
+from keras.initializers import VarianceScaling
 from keras.layers import Lambda, Input, Dense, Dropout
 from keras.models import Model
 from keras import backend as K
@@ -36,12 +37,12 @@ def vae_mlp(original_dim: int, intermediate_dim: int, latent_dim: int, dropout_r
     # build encoder model
     inputs = Input(shape=input_shape, name='encoder_input')
     # 1st hidden layer
-    x = Dense(intermediate_dim, activation='elu')(inputs)
+    x = Dense(intermediate_dim, activation='elu', kernel_initializer=VarianceScaling())(inputs)
     x = Dropout(rate=dropout_rate)(x)
     # 2nd hidden layer
-    x = Dense(intermediate_dim, activation='tanh')(x)
+    x = Dense(intermediate_dim, activation='tanh', kernel_initializer=VarianceScaling())(x)
     x = Dropout(rate=dropout_rate)(x)
-    gaussian_params = Dense(latent_dim * 2, name='gaussian_params')(x)
+    gaussian_params = Dense(latent_dim * 2, name='gaussian_params', kernel_initializer=VarianceScaling())(x)
     # The mean parameter is unconstrained
     mean = Lambda(lambda param: param[:, :latent_dim])(gaussian_params)
     # The standard deviation must be positive. Parametrize with a softplus and
@@ -60,12 +61,12 @@ def vae_mlp(original_dim: int, intermediate_dim: int, latent_dim: int, dropout_r
     # build decoder model
     latent_inputs = Input(shape=(latent_dim,), name='z_sampling')
     # 1st hidden layer
-    x = Dense(intermediate_dim, activation='tanh')(latent_inputs)
+    x = Dense(intermediate_dim, activation='tanh', kernel_initializer=VarianceScaling())(latent_inputs)
     x = Dropout(rate=dropout_rate)(x)
     # 2nd hidden layer
-    x = Dense(intermediate_dim, activation='elu')(x)
+    x = Dense(intermediate_dim, activation='elu', kernel_initializer=VarianceScaling())(x)
     x = Dropout(rate=dropout_rate)(x)
-    outputs = Dense(original_dim, activation='sigmoid')(x)
+    outputs = Dense(original_dim, activation='sigmoid', kernel_initializer=VarianceScaling())(x)
 
     # instantiate decoder model
     decoder = Model(latent_inputs, outputs, name='decoder')
@@ -73,12 +74,12 @@ def vae_mlp(original_dim: int, intermediate_dim: int, latent_dim: int, dropout_r
     plot_model(decoder, to_file='vae_mlp_decoder.png', show_shapes=True)
 
     # instantiate VAE model
-    outputs = decoder(encoder(inputs)[2])
-    outputs = Lambda(lambda out: K.clip(out, 1e-8, 1 - 1e-8))(outputs)
-    vae = Model(inputs, outputs, name='vae_mlp')
+    y = decoder(encoder(inputs)[2])
+    y = Lambda(lambda out: K.clip(out, 1e-8, 1 - 1e-8))(y)
+    vae = Model(inputs, y, name='vae_mlp')
 
     # vae loss
-    marginal_likelihood = K.sum(inputs * K.log(outputs) + (1 - inputs) * K.log(1 - outputs), 1)
+    marginal_likelihood = K.sum(inputs * K.log(y) + (1 - inputs) * K.log(1 - y), 1)
     kl_divergence = K.mean(0.5 * K.sum(K.sqrt(mean) + K.sqrt(stddev) - K.log(1e-8 + K.sqrt(stddev)) - 1, 1))
     marginal_likelihood = K.mean(marginal_likelihood)
     elbo = marginal_likelihood - kl_divergence
@@ -88,3 +89,4 @@ def vae_mlp(original_dim: int, intermediate_dim: int, latent_dim: int, dropout_r
     vae.compile(optimizer='adam')
     vae.summary()
     return vae, encoder, decoder
+
