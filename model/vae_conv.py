@@ -32,7 +32,7 @@ def sampling(args):
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
 
 
-def vae_conv(image_size: int, filters: int, kernel_size: int, latent_dim: int, is_mse: bool):
+def vae_conv(image_size: int, filters: int, kernel_size: int, latent_dim: int, dropout_rate=0.1):
     input_shape = (image_size, image_size, 1)
 
     # VAE model = encoder + decoder
@@ -93,13 +93,8 @@ def vae_conv(image_size: int, filters: int, kernel_size: int, latent_dim: int, i
     outputs = decoder(encoder(inputs)[2])
     vae = Model(inputs, outputs, name='vae')
 
-    # VAE loss = mse_loss or xent_loss + kl_loss
-    if is_mse:
-        reconstruction_loss = mse(K.flatten(inputs), K.flatten(outputs))
-    else:
-        reconstruction_loss = binary_crossentropy(K.flatten(inputs),
-                                                  K.flatten(outputs))
-
+    # VAE loss = mse_loss or xent_loss + kl_loss:
+    reconstruction_loss = mse(K.flatten(inputs), K.flatten(outputs))
     reconstruction_loss *= image_size * image_size
     kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
     kl_loss = K.sum(kl_loss, axis=-1)
