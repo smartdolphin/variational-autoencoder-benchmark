@@ -75,9 +75,8 @@ if __name__ == '__main__':
 
     _, _, z = encoder.predict(x_test, batch_size=args.batch_size)
 
-    # update dropout rate == 0.0
-    if not update_dropout_rate(decoder):
-        print('Dropout layer is not exist')
+    # update dropout rate = 0.0
+    update_dropout_rate(decoder)
 
     plot_results((encoder, decoder),
                  (x_test, y_test),
