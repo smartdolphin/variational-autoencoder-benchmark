@@ -78,13 +78,15 @@ def plot_results(models,
 
     encoder, decoder = models
     x_test, y_test = data
+    N = len(set(y_test))
     os.makedirs(model_name, exist_ok=True)
 
-    filename = os.path.join(model_name, "vae_mean.png")
+    filename = os.path.join(model_name, "vae_2dim.png")
     # display a 2D plot of the digit classes in the latent space
     _, _, z = encoder.predict(x_test, batch_size=batch_size)
     plt.figure(figsize=(12, 10))
-    plt.scatter(z[:, 0], z[:, 1], c=y_test)
+    plt.scatter(z[:, 0], z[:, 1], c=y_test, marker='o', alpha=0.5,
+                edgecolor='none', cmap=discrete_cmap(N, 'jet'))
     plt.colorbar()
     plt.xlabel("z[0]")
     plt.ylabel("z[1]")
@@ -122,3 +124,17 @@ def plot_results(models,
     plt.imshow(figure, cmap='Greys_r')
     plt.savefig(filename)
     plt.show()
+
+
+# borrowed from https://gist.github.com/jakevdp/91077b0cae40f8f8244a
+def discrete_cmap(N, base_cmap=None):
+    """Create an N-bin discrete colormap from the specified input map"""
+
+    # Note that if base_cmap is a string or None, you can simply do
+    #    return plt.cm.get_cmap(base_cmap, N)
+    # The following works for string, None, or a colormap instance:
+
+    base = plt.cm.get_cmap(base_cmap)
+    color_list = base(np.linspace(0, 1, N))
+    cmap_name = base.name + str(N)
+    return base.from_list(cmap_name, color_list, N)
