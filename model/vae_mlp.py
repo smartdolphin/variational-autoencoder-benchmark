@@ -45,7 +45,11 @@ def vae_mlp(original_dim: int, intermediate_dim: int, latent_dim: int, dropout_r
     gaussian_params = Dense(latent_dim * 2, name='gaussian_params', kernel_initializer=VarianceScaling())(x)
     # The mean parameter is unconstrained
     mean = Lambda(lambda param: param[:, :latent_dim])(gaussian_params)
-    log_var = Lambda(lambda param: param[:, latent_dim:])(gaussian_params)
+
+    # The standard deviation must be positive. Parametrize with a softplus and
+    # add a small epsilon for numerical stability
+    # reference: https://github.com/hwalsuklee/tensorflow-mnist-VAE/blob/master/vae.py
+    log_var = Lambda(lambda param: 1e-6 + K.softplus(param[:, latent_dim:]))(gaussian_params)
 
     # use reparameterization trick to push the sampling out as input
     # note that "output_shape" isn't necessary with the TensorFlow backend
