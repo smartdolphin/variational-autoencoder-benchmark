@@ -73,8 +73,6 @@ if __name__ == '__main__':
                   validation_data=(x_test, None))
         model.save_weights('{0}.h5'.format(model.name))
 
-    _, _, z = encoder.predict(x_test, batch_size=args.batch_size)
-
     # update dropout rate = 0.0
     update_dropout_rate(decoder)
 
