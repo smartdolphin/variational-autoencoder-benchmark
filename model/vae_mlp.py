@@ -9,6 +9,7 @@ from keras.layers import Lambda, Input, Dense, Dropout
 from keras.models import Model
 from keras import backend as K
 from keras.utils import plot_model
+from keras.losses import binary_crossentropy
 
 
 # reparameterization trick
@@ -35,57 +36,51 @@ def vae_mlp(original_dim: int, intermediate_dim: int, latent_dim: int, dropout_r
 
     # VAE model = encoder + decoder
     # build encoder model
-    inputs = Input(shape=input_shape, name='encoder_input')
+    x = Input(shape=input_shape, name='encoder_input')
     # 1st hidden layer
-    x = Dense(intermediate_dim, activation='elu', kernel_initializer=VarianceScaling())(inputs)
-    x = Dropout(rate=dropout_rate)(x)
+    h0 = Dense(intermediate_dim, activation='elu', kernel_initializer=VarianceScaling())(x)
+    h0 = Dropout(rate=dropout_rate)(h0)
     # 2nd hidden layer
-    x = Dense(intermediate_dim, activation='tanh', kernel_initializer=VarianceScaling())(x)
-    x = Dropout(rate=dropout_rate)(x)
-    gaussian_params = Dense(latent_dim * 2, name='gaussian_params', kernel_initializer=VarianceScaling())(x)
+    h1 = Dense(intermediate_dim, activation='tanh', kernel_initializer=VarianceScaling())(h0)
+    h1 = Dropout(rate=dropout_rate)(h1)
+    gaussian_params = Dense(latent_dim * 2, name='gaussian_params', kernel_initializer=VarianceScaling())(h1)
     # The mean parameter is unconstrained
     mean = Lambda(lambda param: param[:, :latent_dim])(gaussian_params)
-
-    # The standard deviation must be positive. Parametrize with a softplus and
-    # add a small epsilon for numerical stability
-    # reference: https://github.com/hwalsuklee/tensorflow-mnist-VAE/blob/master/vae.py
-    log_var = Lambda(lambda param: 1e-6 + K.softplus(param[:, latent_dim:]))(gaussian_params)
+    log_var = Lambda(lambda param: param[:, latent_dim:])(gaussian_params)
 
     # use reparameterization trick to push the sampling out as input
     # note that "output_shape" isn't necessary with the TensorFlow backend
     z = Lambda(sampling, output_shape=(latent_dim,), name='z')([mean, log_var])
 
     # instantiate encoder model
-    encoder = Model(inputs, [mean, log_var, z], name='encoder')
+    encoder = Model(x, [mean, log_var, z], name='encoder')
     encoder.summary()
     plot_model(encoder, to_file='vae_mlp_encoder.png', show_shapes=True)
 
     # build decoder model
     latent_inputs = Input(shape=(latent_dim,), name='z_sampling')
     # 1st hidden layer
-    x = Dense(intermediate_dim, activation='tanh', kernel_initializer=VarianceScaling())(latent_inputs)
-    x = Dropout(rate=dropout_rate)(x)
+    h1 = Dense(intermediate_dim, activation='tanh', kernel_initializer=VarianceScaling())(latent_inputs)
+    h1 = Dropout(rate=dropout_rate)(h1)
     # 2nd hidden layer
-    x = Dense(intermediate_dim, activation='elu', kernel_initializer=VarianceScaling())(x)
-    x = Dropout(rate=dropout_rate)(x)
-    outputs = Dense(original_dim, activation='sigmoid', kernel_initializer=VarianceScaling())(x)
+    h2 = Dense(intermediate_dim, activation='elu', kernel_initializer=VarianceScaling())(h1)
+    h2 = Dropout(rate=dropout_rate)(h2)
+    y = Dense(original_dim, activation='sigmoid', kernel_initializer=VarianceScaling())(h2)
 
     # instantiate decoder model
-    decoder = Model(latent_inputs, outputs, name='decoder')
+    decoder = Model(latent_inputs, y, name='decoder')
     decoder.summary()
     plot_model(decoder, to_file='vae_mlp_decoder.png', show_shapes=True)
 
     # instantiate VAE model
-    y = decoder(encoder(inputs)[2])
-    y = Lambda(lambda out: K.clip(out, 1e-8, 1 - 1e-8))(y)
-    vae = Model(inputs, y, name='vae_mlp')
+    _, _, latent_z = encoder(x)
+    y = decoder(latent_z)
+    vae = Model(x, y, name='vae_mlp')
 
     # vae loss
-    marginal_likelihood = K.sum(inputs * K.log(y) + (1 - inputs) * K.log(1 - y), 1)
-    kl_divergence = K.mean(0.5 * K.sum(K.sqrt(mean) + K.sqrt(log_var) - K.log(1e-8 + K.sqrt(log_var)) - 1, 1))
-    marginal_likelihood = K.mean(marginal_likelihood)
-    elbo = marginal_likelihood - kl_divergence
-    vae_loss = -elbo
+    reconstruction_loss = -K.sum(x * K.log(y) + (1 - x) * K.log(1 - y), 1)
+    kl_divergence = -0.5 * K.sum(1 + log_var - (K.square(mean) + K.exp(log_var)), axis=-1)
+    vae_loss = K.mean(reconstruction_loss) + K.mean(kl_divergence)
 
     vae.add_loss(vae_loss)
     vae.compile(optimizer='adam')
