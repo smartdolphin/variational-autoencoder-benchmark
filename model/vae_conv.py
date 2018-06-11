@@ -8,7 +8,7 @@ from keras.layers import Dense, Input
 from keras.layers import Conv2D, Flatten, Lambda
 from keras.layers import Reshape, Conv2DTranspose
 from keras.models import Model
-from keras.losses import mse, binary_crossentropy
+from keras.losses import binary_crossentropy
 from keras.utils import plot_model
 from keras import backend as K
 
@@ -94,7 +94,7 @@ def vae_conv(image_size: int, filters: int, kernel_size: int, latent_dim: int, d
     vae = Model(inputs, outputs, name='vae')
 
     # VAE loss = mse_loss or xent_loss + kl_loss:
-    reconstruction_loss = mse(K.flatten(inputs), K.flatten(outputs))
+    reconstruction_loss = binary_crossentropy(K.flatten(inputs), K.flatten(outputs))
     reconstruction_loss *= image_size * image_size
     kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
     kl_loss = K.sum(kl_loss, axis=-1)

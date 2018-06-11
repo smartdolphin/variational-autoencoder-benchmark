@@ -9,7 +9,6 @@ from keras.layers import Lambda, Input, Dense, Dropout
 from keras.models import Model
 from keras import backend as K
 from keras.utils import plot_model
-from keras.losses import binary_crossentropy
 
 
 # reparameterization trick
